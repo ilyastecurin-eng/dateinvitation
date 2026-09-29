@@ -1,14 +1,15 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// Имя репозитория на GitHub. Сайт будет доступен по адресу
-// https://<логин>.github.io/date-invitation/
-// Если переименуете репозиторий — поменяйте и здесь.
+// Путь сайта на GitHub Pages: https://<логин>.github.io/<имя-репозитория>/
+// На GitHub Actions имя репозитория подставляется автоматически
+// (переменная GITHUB_REPOSITORY = "логин/имя-репозитория").
+// При локальной сборке используется REPO_NAME.
 const REPO_NAME = "date-invitation";
+const repo = process.env.GITHUB_REPOSITORY?.split("/")[1] || REPO_NAME;
 
 export default defineConfig(({ command }) => ({
   plugins: [react()],
-  // При локальной разработке (npm run dev) сайт открывается от корня "/",
-  // а при сборке (npm run build) — от "/date-invitation/" для GitHub Pages.
-  base: command === "build" ? `/${REPO_NAME}/` : "/",
+  // npm run dev → "/", npm run build → "/<имя-репозитория>/"
+  base: command === "build" ? `/${repo}/` : "/",
 }));
