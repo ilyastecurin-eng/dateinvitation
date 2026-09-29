@@ -1,9 +1,11 @@
+# Автоматическая публикация на GitHub Pages.
+# При каждом push в ветку main: npm install → npm run build → публикация папки dist.
 name: Deploy to GitHub Pages
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  # Ручной запуск: Actions → Deploy to GitHub Pages → Run workflow
   workflow_dispatch:
 
 permissions:
@@ -11,33 +13,66 @@ permissions:
   pages: write
   id-token: write
 
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
         with:
           node-version: 22
-          
+
+      # Находит папку с package.json — на случай, если проект
+      # загружен в репозиторий не в корень, а во вложенную папку.
+      - name: Find project folder
+        id: project
+        run: |
+          file=$(find . -name package.json -not -path "*/node_modules/*" -not -path "./.git/*" | awk '{ print length, $0 }' | sort -n | head -1 | cut -d" " -f2-)
+          if [ -z "$file" ]; then
+            echo "::error::package.json не найден в репозитории. Загрузите все файлы проекта."
+            exit 1
+          fi
+          dir=$(dirname "$file")
+          echo "Проект найден в папке: $dir"
+          ls -la "$dir"
+          for f in index.html vite.config.js src/main.jsx; do
+            if [ ! -f "$dir/$f" ]; then
+              echo "::error::Не найден файл $dir/$f — проверьте, что он загружен и назван именно так."
+              exit 1
+            fi
+          done
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
+        working-directory: ${{ steps.project.outputs.dir }}
         run: npm install
 
       - name: Build
+        working-directory: ${{ steps.project.outputs.dir }}
         run: npm run build
 
-      - name: Setup GitHub Pages
+      - name: Configure Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload website
+      - name: Upload dist
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./dist
+          path: ${{ steps.project.outputs.dir }}/dist
 
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - name: Deploy to GitHub Pages
+        id: deployment
         uses: actions/deploy-pages@v4
